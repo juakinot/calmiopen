@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CALMIO PEN – Análisis Semanal de Estrés</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- NUEVO: script de APIs de Google -->
+  <script async defer src="https://apis.google.com/js/api.js"
+          onload="gapiLoaded()"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{
@@ -14,7 +17,7 @@
     .container{max-width:1100px;margin:0 auto}
     header{
       display:flex;justify-content:space-between;align-items:center;
-      padding:20px 24px;margin-bottom:24px;border-radius:16px;
+      padding:20px 24px;margin-bottom:16px;border-radius:16px;
       background:#ffffff;box-shadow:0 4px 14px rgba(15,23,42,.08);
     }
     .brand{display:flex;align-items:center;gap:10px}
@@ -69,6 +72,48 @@
     }
     .muted{font-size:12px;color:#94a3b8}
     .error{color:#b91c1c;font-size:13px;margin-top:6px}
+
+    /* NUEVO: navegación simple */
+    .nav-links{
+      display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 20px;
+    }
+    .nav-btn{
+      border:none;border-radius:999px;padding:6px 14px;
+      font-size:12px;font-weight:600;cursor:pointer;
+      background:#e0f2fe;color:#0369a1;
+    }
+    .nav-btn.primary{
+      background:#0f766e;color:#ecfeff;
+    }
+
+    /* NUEVO: estilos sección Calendar */
+    .inline-input{
+      display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 10px;
+    }
+    .inline-input input[type="text"]{
+      padding:6px 10px;border-radius:999px;border:1px solid #cbd5e1;
+      font-size:13px;min-width:220px;
+    }
+    .small-btn{
+      border:none;border-radius:999px;padding:6px 12px;
+      font-size:12px;font-weight:600;cursor:pointer;
+      background:#0f766e;color:#ecfeff;
+    }
+    .small-btn.secondary{
+      background:#e2e8f0;color:#475569;
+    }
+    .calendar-status{
+      font-size:12px;color:#64748b;margin:6px 0;
+    }
+    .event-list{
+      margin-top:10px;font-size:12px;color:#475569;
+      max-height:180px;overflow-y:auto;
+    }
+    .event-item{
+      padding:6px 8px;border-radius:8px;margin-bottom:4px;
+      background:#f8fafc;border:1px solid #e2e8f0;
+    }
+
     @media(max-width:700px){
       header{flex-direction:column;align-items:flex-start;gap:8px}
     }
@@ -90,8 +135,14 @@
     </div>
   </header>
 
+  <!-- NUEVO: navegación interna -->
+  <div class="nav-links">
+    <button class="nav-btn primary" onclick="scrollToSection('csvSection')">Ver análisis CSV</button>
+    <button class="nav-btn" onclick="scrollToSection('calendarSection')">Vincular CALMIO PEN + Google Calendar</button>
+  </div>
+
   <!-- SUBIDA CSV -->
-  <div class="upload-card">
+  <div class="upload-card" id="csvSection">
     <h2>1. Sube tus datos de la semana</h2>
     <p class="desc">
       Exporta desde Excel un archivo <strong>.csv</strong> con este formato mínimo:
@@ -164,9 +215,51 @@
       <p class="muted">Cuando subas tu archivo, aquí aparecerán recomendaciones específicas para ti.</p>
     </div>
   </div>
+
+  <!-- NUEVO: VINCULAR CALMIO PEN + GOOGLE CALENDAR -->
+  <div class="panel" id="calendarSection">
+    <h2>5. Vincula tu CALMIO PEN y Google Calendar</h2>
+    <p class="desc">
+      Aquí podrás asociar tu dispositivo con tu cuenta de Google Calendar para que CALMIO sepa en qué tipo de evento estabas
+      cuando manipulaste mucho el lápiz (clase, examen, trabajo en grupo, etc.). Esta sección solo lee tus eventos; no modifica tu calendario. [web:1459][web:1468][web:1471]
+    </p>
+
+    <!-- Código del dispositivo -->
+    <div class="inline-input">
+      <label for="penCodeInput" class="muted">Código de tu CALMIO PEN:</label>
+      <input type="text" id="penCodeInput" placeholder="Ej: CALMIO-1234">
+      <button class="small-btn" onclick="savePenCode()">Guardar</button>
+      <span class="muted" id="penCodeStatus"></span>
+    </div>
+
+    <!-- Autenticación con Google Calendar -->
+    <div class="inline-input">
+      <button id="authorize_button" class="small-btn" style="display:none" onclick="handleAuthClick()">Conectar con Google Calendar</button>
+      <button id="signout_button" class="small-btn secondary" style="display:none" onclick="handleSignoutClick()">Desconectar</button>
+    </div>
+    <div class="calendar-status" id="calendarStatus">
+      Aún no has conectado tu Google Calendar.
+    </div>
+
+    <!-- Lista simple de eventos como pseudo-dato -->
+    <div class="event-list" id="events">
+      <!-- Aquí se mostrarán los próximos eventos -->
+    </div>
+
+    <p class="muted" style="margin-top:8px;">
+      En el prototipo, estos eventos se usan como “pseudo‑datos” para saber en qué estabas cuando tu CALMIO PEN detecte mucha actividad.
+      Más adelante, estos datos se cruzarán automáticamente con tus registros semanales de estrés. [web:1403][web:1391][web:1400]
+    </p>
+  </div>
 </div>
 
 <script>
+  // ========= UTILIDAD: scroll interno =========
+  function scrollToSection(id){
+    const el = document.getElementById(id);
+    if(el){ el.scrollIntoView({behavior:"smooth"}); }
+  }
+
   // ========= PARSEO CSV =========
   function parseCSV(text) {
     const lines = text.trim().split(/\r?\n/);
@@ -219,17 +312,14 @@
       sum += r.pulsos;
       if (stats.perNivel[r.nivel] !== undefined) stats.perNivel[r.nivel]++;
 
-      // por día
       if (!stats.perDia[r.fecha]) stats.perDia[r.fecha] = {sum:0,count:0};
       stats.perDia[r.fecha].sum += r.pulsos;
       stats.perDia[r.fecha].count++;
 
-      // por contexto
       if (!stats.perContexto[r.contexto]) stats.perContexto[r.contexto] = {sum:0,count:0};
       stats.perContexto[r.contexto].sum += r.pulsos;
       stats.perContexto[r.contexto].count++;
 
-      // peor momento (mayor pulsos)
       if (r.pulsos > maxPulsos) {
         maxPulsos = r.pulsos;
         stats.worstContext = r.contexto;
@@ -250,7 +340,6 @@
     const pctMed = (stats.perNivel.MEDIUM / total) * 100;
     const pctLow = (stats.perNivel.LOW / total) * 100;
 
-    // 1. Nivel global de riesgo
     if (pctHigh > 40) {
       recs.push({
         tag: "Alerta alta",
@@ -268,7 +357,6 @@
       });
     }
 
-    // 2. Estrés sostenido moderado
     if (pctMed > 40) {
       recs.push({
         tag: "Estrés sostenido",
@@ -276,7 +364,6 @@
       });
     }
 
-    // 3. Contextos más estresantes
     const contextEntries = Object.entries(stats.perContexto).map(
       ([ctx, v]) => ({ctx, avg: v.sum / v.count})
     ).sort((a,b)=>b.avg-a.avg);
@@ -289,7 +376,6 @@
       });
     }
 
-    // 4. Micro-hábitos de recuperación
     if (pctLow < 30) {
       recs.push({
         tag: "Recuperación",
@@ -370,7 +456,7 @@
     });
   }
 
-  // ========= UI PRINCIPAL =========
+  // ========= UI PRINCIPAL CSV =========
   document.getElementById("fileInput").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     const errorDiv = document.getElementById("uploadError");
@@ -397,7 +483,6 @@
 
     const stats = computeStats(rows);
 
-    // Resumen
     const total = stats.total || 1;
     const pctLow = (stats.perNivel.LOW / total) * 100;
     const pctMed = (stats.perNivel.MEDIUM / total) * 100;
@@ -417,10 +502,8 @@
     document.getElementById("summaryText").textContent =
       "Este resumen se basa en los datos reales que tu CALMIO PEN registró durante la semana.";
 
-    // Gráficos
     renderCharts(stats);
 
-    // Recomendaciones
     const recs = buildRecommendations(stats);
     const recDiv = document.getElementById("recsContainer");
     recDiv.innerHTML = "";
@@ -437,6 +520,136 @@
       recDiv.appendChild(el);
     });
   });
+
+  // ========= NUEVO: guardar código CALMIO PEN =========
+  function savePenCode(){
+    const input = document.getElementById("penCodeInput");
+    const code = input.value.trim();
+    const status = document.getElementById("penCodeStatus");
+    if(!code){
+      status.textContent = " Ingresa un código válido.";
+      return;
+    }
+    try{
+      localStorage.setItem("calmioPenCode", code);
+      status.textContent = " Código guardado.";
+    }catch(e){
+      status.textContent = " No se pudo guardar el código en este navegador.";
+    }
+  }
+
+  // Cargar código guardado al inicio
+  (function(){
+    const saved = localStorage.getItem("calmioPenCode");
+    if(saved){
+      document.getElementById("penCodeInput").value = saved;
+      document.getElementById("penCodeStatus").textContent = " Código cargado.";
+    }
+  })();
+
+  // ========= NUEVO: Google Calendar API =========
+  // Debes crear tu proyecto en Google Cloud y poner aquí tus claves. [web:1459][web:1468][web:1471]
+  const CALMIO_API_KEY = "TU_API_KEY_AQUI";
+  const CALMIO_CLIENT_ID = "TU_CLIENT_ID_OAUTH_AQUI.apps.googleusercontent.com";
+  const CALMIO_SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
+  const CALMIO_DISCOVERY_DOCS = [
+    "https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"
+  ];
+
+  let gapiInited = false;
+  let gapiClientInited = false;
+
+  function gapiLoaded() {
+    gapi.load("client:auth2", initGapiClient);
+  }
+
+  async function initGapiClient() {
+    try{
+      await gapi.client.init({
+        apiKey: CALMIO_API_KEY,
+        clientId: CALMIO_CLIENT_ID,
+        discoveryDocs: CALMIO_DISCOVERY_DOCS,
+        scope: CALMIO_SCOPES
+      });
+      gapiInited = true;
+
+      const authInstance = gapi.auth2.getAuthInstance();
+      authInstance.isSignedIn.listen(updateSigninStatus);
+      updateSigninStatus(authInstance.isSignedIn.get());
+    }catch(err){
+      document.getElementById("calendarStatus").textContent =
+        "Error inicializando Google Calendar. Revisa tu API key y Client ID.";
+      console.error(err);
+    }
+  }
+
+  function updateSigninStatus(isSignedIn){
+    const authBtn = document.getElementById("authorize_button");
+    const signoutBtn = document.getElementById("signout_button");
+    const status = document.getElementById("calendarStatus");
+
+    if(isSignedIn){
+      authBtn.style.display = "none";
+      signoutBtn.style.display = "inline-block";
+      status.textContent = "Google Calendar conectado. Leyendo tus próximos eventos...";
+      listUpcomingEvents();
+    }else{
+      authBtn.style.display = "inline-block";
+      signoutBtn.style.display = "none";
+      status.textContent = "Aún no has conectado tu Google Calendar.";
+      document.getElementById("events").innerHTML = "";
+    }
+  }
+
+  function handleAuthClick(){
+    if(!gapiInited){
+      alert("La API de Google aún no ha cargado. Intenta de nuevo en unos segundos.");
+      return;
+    }
+    gapi.auth2.getAuthInstance().signIn();
+  }
+
+  function handleSignoutClick(){
+    gapi.auth2.getAuthInstance().signOut();
+  }
+
+  // Lee algunos eventos próximos como pseudo-dato [web:1459][web:1469][web:1465]
+  function listUpcomingEvents(){
+    const eventsDiv = document.getElementById("events");
+    eventsDiv.innerHTML = "Cargando eventos...";
+
+    const now = new Date().toISOString();
+    gapi.client.calendar.events.list({
+      calendarId: "primary",
+      timeMin: now,
+      showDeleted: false,
+      singleEvents: true,
+      maxResults: 10,
+      orderBy: "startTime"
+    }).then(res => {
+      const events = res.result.items || [];
+      if(!events.length){
+        eventsDiv.innerHTML = "<p class='muted'>No se encontraron eventos próximos.</p>";
+        return;
+      }
+      eventsDiv.innerHTML = "";
+      events.forEach(ev => {
+        const start = ev.start.dateTime || ev.start.date;
+        const end = ev.end.dateTime || ev.end.date;
+        const el = document.createElement("div");
+        el.className = "event-item";
+        el.innerHTML = `<strong>${ev.summary || "Sin título"}</strong><br>
+                        <span>${start} → ${end}</span>`;
+        eventsDiv.appendChild(el);
+      });
+
+      // Aquí en el futuro puedes guardar estos eventos en tu backend o en localStorage
+      // para cruzarlos con los timestamps del CALMIO PEN.
+    }).catch(err => {
+      console.error(err);
+      eventsDiv.innerHTML = "<p class='error'>No se pudieron leer los eventos del calendario.</p>";
+    });
+  }
 </script>
 </body>
 </html>
