@@ -547,91 +547,117 @@
     }
   })();
 
-  // ========= NUEVO: Google Calendar API =========
-  // Debes crear tu proyecto en Google Cloud y poner aquí tus claves. [web:1459][web:1468][web:1471]
+  // ========= NUEVO: Google Calendar API (versión actualizada) =========
   const CALMIO_API_KEY   = "AlzaSyBocbPCbNAvq1kzwIoMkP_qXBC-tSV_1hU";
   const CALMIO_CLIENT_ID = "937391993802-8shughr1t7spi15ov0ahikqkjj5u7mf5.apps.googleusercontent.com";
   const CALMIO_SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
-  const CALMIO_DISCOVERY_DOCS = [
-    "https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"
-  ];
+  const CALMIO_DISCOVERY_DOC = "https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest";
 
-  let gapiInited = false;
-  let gapiClientInited = false;
+  let gapiReady = false;
+  let gisReady = false;
+  let tokenClient = null;
 
+  // Se llama cuando se carga api.js
   function gapiLoaded() {
-    gapi.load("client:auth2", initGapiClient);
+    gapi.load("client", initGapiClient);
   }
 
   async function initGapiClient() {
-    try{
+    try {
+      // Solo API key + discovery; el client_id y scope van por Google Identity Services
       await gapi.client.init({
         apiKey: CALMIO_API_KEY,
-        clientId: CALMIO_CLIENT_ID,
-        discoveryDocs: CALMIO_DISCOVERY_DOCS,
-        scope: CALMIO_SCOPES
+        discoveryDocs: [CALMIO_DISCOVERY_DOC],
       });
-      gapiInited = true;
-
-      const authInstance = gapi.auth2.getAuthInstance();
-      authInstance.isSignedIn.listen(updateSigninStatus);
-      updateSigninStatus(authInstance.isSignedIn.get());
-    }catch(err){
+      gapiReady = true;
+      maybeEnableCalendarButton();
+    } catch (err) {
       document.getElementById("calendarStatus").textContent =
-        "Error inicializando Google Calendar. Revisa tu API key y Client ID.";
+        "Error inicializando Google Calendar (cliente). Revisa tu API key y sus restricciones.";
       console.error(err);
     }
   }
 
-  function updateSigninStatus(isSignedIn){
-    const authBtn = document.getElementById("authorize_button");
-    const signoutBtn = document.getElementById("signout_button");
-    const status = document.getElementById("calendarStatus");
+  // Se llama cuando se carga gsi/client
+  function gisLoaded() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CALMIO_CLIENT_ID,
+      scope: CALMIO_SCOPES,
+      callback: () => {}
+    });
+    gisReady = true;
+    maybeEnableCalendarButton();
+  }
 
-    if(isSignedIn){
-      authBtn.style.display = "none";
-      signoutBtn.style.display = "inline-block";
-      status.textContent = "Google Calendar conectado. Leyendo tus próximos eventos...";
-      listUpcomingEvents();
-    }else{
-      authBtn.style.display = "inline-block";
-      signoutBtn.style.display = "none";
-      status.textContent = "Aún no has conectado tu Google Calendar.";
-      document.getElementById("events").innerHTML = "";
+  function maybeEnableCalendarButton() {
+    if (gapiReady && gisReady) {
+      document.getElementById("authorize_button").style.display = "inline-block";
     }
   }
 
-  function handleAuthClick(){
-    if(!gapiInited){
-      alert("La API de Google aún no ha cargado. Intenta de nuevo en unos segundos.");
+  function handleAuthClick() {
+    if (!tokenClient) {
+      alert("La librería de Google aún no está lista. Recarga la página e inténtalo de nuevo.");
       return;
     }
-    gapi.auth2.getAuthInstance().signIn();
+
+    document.getElementById("calendarStatus").textContent =
+      "Abriendo Google para conectar tu calendario...";
+
+    tokenClient.callback = async (resp) => {
+      if (resp.error) {
+        console.error(resp);
+        document.getElementById("calendarStatus").textContent =
+          "No se pudo autorizar el acceso al calendario.";
+        return;
+      }
+
+      document.getElementById("authorize_button").style.display = "none";
+      document.getElementById("signout_button").style.display = "inline-block";
+      document.getElementById("calendarStatus").textContent =
+        "Google Calendar conectado. Leyendo tus próximos eventos...";
+
+      await listUpcomingEvents();
+    };
+
+    tokenClient.requestAccessToken({ prompt: "consent" });
   }
 
-  function handleSignoutClick(){
-    gapi.auth2.getAuthInstance().signOut();
+  function handleSignoutClick() {
+    const token = gapi.client.getToken();
+    if (token) {
+      google.accounts.oauth2.revoke(token.access_token);
+      gapi.client.setToken(null);
+    }
+    document.getElementById("signout_button").style.display = "none";
+    document.getElementById("authorize_button").style.display = "inline-block";
+    document.getElementById("calendarStatus").textContent =
+      "Se cerró la sesión de Google Calendar.";
+    document.getElementById("events").innerHTML = "";
   }
 
-  // Lee algunos eventos próximos como pseudo-dato [web:1459][web:1469][web:1465]
-  function listUpcomingEvents(){
+  // Lee algunos eventos próximos como pseudo-dato
+  async function listUpcomingEvents() {
     const eventsDiv = document.getElementById("events");
     eventsDiv.innerHTML = "Cargando eventos...";
 
-    const now = new Date().toISOString();
-    gapi.client.calendar.events.list({
-      calendarId: "primary",
-      timeMin: now,
-      showDeleted: false,
-      singleEvents: true,
-      maxResults: 10,
-      orderBy: "startTime"
-    }).then(res => {
+    try {
+      const now = new Date().toISOString();
+      const res = await gapi.client.calendar.events.list({
+        calendarId: "primary",
+        timeMin: now,
+        showDeleted: false,
+        singleEvents: true,
+        maxResults: 10,
+        orderBy: "startTime"
+      });
+
       const events = res.result.items || [];
-      if(!events.length){
+      if (!events.length) {
         eventsDiv.innerHTML = "<p class='muted'>No se encontraron eventos próximos.</p>";
         return;
       }
+
       eventsDiv.innerHTML = "";
       events.forEach(ev => {
         const start = ev.start.dateTime || ev.start.date;
@@ -642,13 +668,10 @@
                         <span>${start} → ${end}</span>`;
         eventsDiv.appendChild(el);
       });
-
-      // Aquí en el futuro puedes guardar estos eventos en tu backend o en localStorage
-      // para cruzarlos con los timestamps del CALMIO PEN.
-    }).catch(err => {
+    } catch (err) {
       console.error(err);
       eventsDiv.innerHTML = "<p class='error'>No se pudieron leer los eventos del calendario.</p>";
-    });
+    }
   }
 </script>
 </body>
