@@ -5,11 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CALMIO PEN – Análisis Semanal de Estrés</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- NUEVO: script de APIs de Google -->
-<script async defer src="https://apis.google.com/js/api.js"
-        onload="gapiLoaded()"></script>
-<script async defer src="https://accounts.google.com/gsi/client"
-        onload="gisLoaded()"></script>
+  <!-- Scripts de Google: sin onload, se inicializan al final -->
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{
@@ -75,7 +73,6 @@
     .muted{font-size:12px;color:#94a3b8}
     .error{color:#b91c1c;font-size:13px;margin-top:6px}
 
-    /* NUEVO: navegación simple */
     .nav-links{
       display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 20px;
     }
@@ -88,7 +85,6 @@
       background:#0f766e;color:#ecfeff;
     }
 
-    /* NUEVO: estilos sección Calendar */
     .inline-input{
       display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 10px;
     }
@@ -137,25 +133,22 @@
     </div>
   </header>
 
-  <!-- NUEVO: navegación interna -->
   <div class="nav-links">
     <button class="nav-btn primary" onclick="scrollToSection('csvSection')">Ver análisis CSV</button>
     <button class="nav-btn" onclick="scrollToSection('calendarSection')">Vincular CALMIO PEN + Google Calendar</button>
   </div>
 
-  <!-- SUBIDA CSV -->
   <div class="upload-card" id="csvSection">
     <h2>1. Sube tus datos de la semana</h2>
     <p class="desc">
       Exporta desde Excel un archivo <strong>.csv</strong> con este formato mínimo:
-      <code>fecha,hora,nivel,pulsos,contexto</code>
+      de>fecha,hora,nivel,pulsos,contexto</code>
       (ejemplo de nivel: LOW, MEDIUM, HIGH).
     </p>
     <input type="file" id="fileInput" accept=".csv">
     <div id="uploadError" class="error"></div>
   </div>
 
-  <!-- RESUMEN -->
   <div class="panel">
     <h2>2. Resumen de tu semana</h2>
     <p class="desc" id="summaryText">Aún no hay datos cargados. Sube un CSV para ver tu análisis.</p>
@@ -187,27 +180,25 @@
     </div>
   </div>
 
-  <!-- GRÁFICOS -->
   <div class="panel">
     <h2>3. Visualización de tu estrés</h2>
     <p class="desc">Explora cómo cambia tu nivel de estrés según el día, la hora y el tipo de actividad.</p>
     <div class="charts-grid">
       <div class="chart-box">
         <h3 class="muted">Estrés promedio por día</h3>
-        <canvas id="dayChart"></canvas>
+        anvas id="dayChart"></canvas>
       </div>
       <div class="chart-box">
         <h3 class="muted">Estrés por tipo de actividad</h3>
-        <canvas id="contextChart"></canvas>
+        anvas id="contextChart"></canvas>
       </div>
       <div class="chart-box">
         <h3 class="muted">Distribución LOW / MEDIUM / HIGH</h3>
-        <canvas id="levelChart"></canvas>
+        anvas id="levelChart"></canvas>
       </div>
     </div>
   </div>
 
-  <!-- RECOMENDACIONES IA -->
   <div class="panel">
     <h2>4. Acompañamiento CALMIO (IA)</h2>
     <p class="desc">
@@ -218,7 +209,6 @@
     </div>
   </div>
 
-  <!-- NUEVO: VINCULAR CALMIO PEN + GOOGLE CALENDAR -->
   <div class="panel" id="calendarSection">
     <h2>5. Vincula tu CALMIO PEN y Google Calendar</h2>
     <p class="desc">
@@ -226,7 +216,6 @@
       cuando manipulaste mucho el lápiz (clase, examen, trabajo en grupo, etc.). Esta sección solo lee tus eventos; no modifica tu calendario. [web:1459][web:1468][web:1471]
     </p>
 
-    <!-- Código del dispositivo -->
     <div class="inline-input">
       <label for="penCodeInput" class="muted">Código de tu CALMIO PEN:</label>
       <input type="text" id="penCodeInput" placeholder="Ej: CALMIO-1234">
@@ -234,7 +223,6 @@
       <span class="muted" id="penCodeStatus"></span>
     </div>
 
-    <!-- Autenticación con Google Calendar -->
     <div class="inline-input">
       <button id="authorize_button" class="small-btn" style="display:none" onclick="handleAuthClick()">Conectar con Google Calendar</button>
       <button id="signout_button" class="small-btn secondary" style="display:none" onclick="handleSignoutClick()">Desconectar</button>
@@ -243,10 +231,7 @@
       Aún no has conectado tu Google Calendar.
     </div>
 
-    <!-- Lista simple de eventos como pseudo-dato -->
-    <div class="event-list" id="events">
-      <!-- Aquí se mostrarán los próximos eventos -->
-    </div>
+    <div class="event-list" id="events"></div>
 
     <p class="muted" style="margin-top:8px;">
       En el prototipo, estos eventos se usan como “pseudo‑datos” para saber en qué estabas cuando tu CALMIO PEN detecte mucha actividad.
@@ -256,28 +241,23 @@
 </div>
 
 <script>
-  // ========= UTILIDAD: scroll interno =========
   function scrollToSection(id){
     const el = document.getElementById(id);
     if(el){ el.scrollIntoView({behavior:"smooth"}); }
   }
 
-  // ========= PARSEO CSV =========
   function parseCSV(text) {
     const lines = text.trim().split(/\r?\n/);
     if (lines.length < 2) return [];
-
     const header = lines[0].split(",").map(h => h.trim().toLowerCase());
     const idxFecha = header.indexOf("fecha");
     const idxHora = header.indexOf("hora");
     const idxNivel = header.indexOf("nivel");
     const idxPulsos = header.indexOf("pulsos");
     const idxContexto = header.indexOf("contexto");
-
     if (idxFecha === -1 || idxHora === -1 || idxNivel === -1 || idxPulsos === -1) {
       throw new Error("El CSV debe tener al menos las columnas: fecha,hora,nivel,pulsos,contexto");
     }
-
     const data = [];
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
@@ -294,76 +274,59 @@
     return data;
   }
 
-  // ========= ESTADÍSTICAS =========
   function computeStats(rows) {
     const stats = {
       total: rows.length,
       avgPulsos: 0,
       perNivel: { LOW:0, MEDIUM:0, HIGH:0 },
-      perDia: {},          // fecha -> {sum, count}
-      perContexto: {},     // ctx -> {sum, count}
+      perDia: {},
+      perContexto: {},
       worstContext: null,
       worstHour: null
     };
     if (!rows.length) return stats;
-
     let sum = 0;
     let maxPulsos = -1;
-
     rows.forEach(r => {
       sum += r.pulsos;
       if (stats.perNivel[r.nivel] !== undefined) stats.perNivel[r.nivel]++;
-
       if (!stats.perDia[r.fecha]) stats.perDia[r.fecha] = {sum:0,count:0};
       stats.perDia[r.fecha].sum += r.pulsos;
       stats.perDia[r.fecha].count++;
-
       if (!stats.perContexto[r.contexto]) stats.perContexto[r.contexto] = {sum:0,count:0};
       stats.perContexto[r.contexto].sum += r.pulsos;
       stats.perContexto[r.contexto].count++;
-
       if (r.pulsos > maxPulsos) {
         maxPulsos = r.pulsos;
         stats.worstContext = r.contexto;
         stats.worstHour = r.hora + " (" + r.fecha + ")";
       }
     });
-
     stats.avgPulsos = sum / rows.length;
     return stats;
   }
 
-  // ========= IA: RECOMENDACIONES =========
   function buildRecommendations(stats) {
     const recs = [];
-
     const total = stats.total || 1;
     const pctHigh = (stats.perNivel.HIGH / total) * 100;
     const pctMed = (stats.perNivel.MEDIUM / total) * 100;
     const pctLow = (stats.perNivel.LOW / total) * 100;
 
     if (pctHigh > 40) {
-      recs.push({
-        tag: "Alerta alta",
-        text: "Tu semana mostró muchos picos de estrés alto. Programa pausas obligatorias de 5 minutos cada 25 minutos de estudio y evita acumular trabajo para el último momento."
-      });
+      recs.push({ tag: "Alerta alta",
+        text: "Tu semana mostró muchos picos de estrés alto. Programa pausas obligatorias de 5 minutos cada 25 minutos de estudio y evita acumular trabajo para el último momento." });
     } else if (pctHigh > 20) {
-      recs.push({
-        tag: "Vigilar",
-        text: "Aparecen bastantes momentos de estrés alto. Usa tu CALMIO PEN cada vez que notes inquietud en las manos para hacer 2 ciclos de respiración profunda guiada."
-      });
+      recs.push({ tag: "Vigilar",
+        text: "Aparecen bastantes momentos de estrés alto. Usa tu CALMIO PEN cada vez que notes inquietud en las manos para hacer 2 ciclos de respiración profunda guiada." });
     } else {
-      recs.push({
-        tag: "Buen control",
-        text: "Tus niveles de estrés alto se mantienen bajo control. Mantén tus rutinas actuales y sigue utilizando el CALMIO PEN como recordatorio de respiración consciente."
-      });
+      recs.push({ tag: "Buen control",
+        text: "Tus niveles de estrés alto se mantienen bajo control. Mantén tus rutinas actuales y sigue utilizando el CALMIO PEN como recordatorio de respiración consciente." });
     }
 
     if (pctMed > 40) {
-      recs.push({
-        tag: "Estrés sostenido",
-        text: "Pasaste gran parte del tiempo en estrés moderado. Prueba a planificar tu semana el domingo por la noche para reducir la sensación de carga constante."
-      });
+      recs.push({ tag: "Estrés sostenido",
+        text: "Pasaste gran parte del tiempo en estrés moderado. Prueba a planificar tu semana el domingo por la noche para reducir la sensación de carga constante." });
     }
 
     const contextEntries = Object.entries(stats.perContexto).map(
@@ -379,28 +342,21 @@
     }
 
     if (pctLow < 30) {
-      recs.push({
-        tag: "Recuperación",
-        text: "Tu cuerpo casi no pasa a estado de calma completa. Intenta añadir micro-pausas sin pantalla (mirar por la ventana, estirar, beber agua) entre bloques de estudio."
-      });
+      recs.push({ tag: "Recuperación",
+        text: "Tu cuerpo casi no pasa a estado de calma completa. Intenta añadir micro-pausas sin pantalla (mirar por la ventana, estirar, beber agua) entre bloques de estudio." });
     } else {
-      recs.push({
-        tag: "Recuperación adecuada",
-        text: "Se observa buen tiempo en estado de calma. Mantén esos espacios de desconexión: son clave para consolidar lo que estudias."
-      });
+      recs.push({ tag: "Recuperación adecuada",
+        text: "Se observa buen tiempo en estado de calma. Mantén esos espacios de desconexión: son clave para consolidar lo que estudias." });
     }
-
     return recs;
   }
 
-  // ========= GRÁFICOS =========
   let dayChart, contextChart, levelChart;
 
   function renderCharts(stats) {
     const dayCtx = document.getElementById("dayChart").getContext("2d");
     const ctxCtx = document.getElementById("contextChart").getContext("2d");
     const levelCtx = document.getElementById("levelChart").getContext("2d");
-
     if (dayChart) dayChart.destroy();
     if (contextChart) contextChart.destroy();
     if (levelChart) levelChart.destroy();
@@ -410,17 +366,13 @@
 
     dayChart = new Chart(dayCtx, {
       type: "line",
-      data: {
-        labels: dayLabels,
-        datasets: [{
-          label: "Pulsos promedio",
+      data: { labels: dayLabels,
+        datasets: [{ label: "Pulsos promedio",
           data: dayData,
           borderColor: "#0f766e",
           backgroundColor: "rgba(15,118,110,0.15)",
           tension: 0.35,
-          fill: true
-        }]
-      },
+          fill: true }]},
       options: {responsive:true,maintainAspectRatio:false}
     });
 
@@ -429,47 +381,36 @@
 
     contextChart = new Chart(ctxCtx, {
       type: "bar",
-      data: {
-        labels: ctxLabels,
-        datasets: [{
-          label: "Pulsos promedio",
+      data: { labels: ctxLabels,
+        datasets: [{ label: "Pulsos promedio",
           data: ctxData,
-          backgroundColor: "#3b82f6"
-        }]
-      },
+          backgroundColor: "#3b82f6" }]},
       options: {responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}}}
     });
 
     const total = stats.total || 1;
     levelChart = new Chart(levelCtx, {
       type: "doughnut",
-      data: {
-        labels: ["LOW","MEDIUM","HIGH"],
-        datasets: [{
-          data: [
+      data: { labels: ["LOW","MEDIUM","HIGH"],
+        datasets: [{ data: [
             stats.perNivel.LOW,
             stats.perNivel.MEDIUM,
             stats.perNivel.HIGH
           ],
-          backgroundColor:["#22c55e","#fbbf24","#ef4444"]
-        }]
-      },
+          backgroundColor:["#22c55e","#fbbf24","#ef4444"] }]},
       options:{responsive:true,maintainAspectRatio:false}
     });
   }
 
-  // ========= UI PRINCIPAL CSV =========
   document.getElementById("fileInput").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     const errorDiv = document.getElementById("uploadError");
     errorDiv.textContent = "";
-
     if (!file) return;
     if (!file.name.endsWith(".csv")) {
       errorDiv.textContent = "Por favor selecciona un archivo .csv exportado desde Excel.";
       return;
     }
-
     const text = await file.text();
     let rows;
     try {
@@ -484,7 +425,6 @@
     }
 
     const stats = computeStats(rows);
-
     const total = stats.total || 1;
     const pctLow = (stats.perNivel.LOW / total) * 100;
     const pctMed = (stats.perNivel.MEDIUM / total) * 100;
@@ -497,15 +437,12 @@
     document.getElementById("highPct").textContent = `Alto ${pctHigh.toFixed(0)}%`;
     document.getElementById("daysCount").textContent = Object.keys(stats.perDia).length;
     document.getElementById("recordsCount").textContent = `${stats.total} registros`;
-
     document.getElementById("worstContext").textContent = stats.worstContext || "--";
     document.getElementById("worstTime").textContent = stats.worstHour || "--";
-
     document.getElementById("summaryText").textContent =
       "Este resumen se basa en los datos reales que tu CALMIO PEN registró durante la semana.";
 
     renderCharts(stats);
-
     const recs = buildRecommendations(stats);
     const recDiv = document.getElementById("recsContainer");
     recDiv.innerHTML = "";
@@ -523,7 +460,6 @@
     });
   });
 
-  // ========= NUEVO: guardar código CALMIO PEN =========
   function savePenCode(){
     const input = document.getElementById("penCodeInput");
     const code = input.value.trim();
@@ -540,7 +476,6 @@
     }
   }
 
-  // Cargar código guardado al inicio
   (function(){
     const saved = localStorage.getItem("calmioPenCode");
     if(saved){
@@ -549,7 +484,6 @@
     }
   })();
 
-  // ========= NUEVO: Google Calendar API (versión actualizada) =========
   const CALMIO_API_KEY   = "AlzaSyBocbPCbNAvq1kzwIoMkP_qXBC-tSV_1hU";
   const CALMIO_CLIENT_ID = "937391993802-8shughr1t7spi15ov0ahikqkjj5u7mf5.apps.googleusercontent.com";
   const CALMIO_SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
@@ -559,29 +493,26 @@
   let gisReady = false;
   let tokenClient = null;
 
-  // Se llama cuando se carga api.js
   function gapiLoaded() {
-    gapi.load("client", initGapiClient);
+    if (!window.gapi) return;
+    gapi.load("client", async () => {
+      try{
+        await gapi.client.init({
+          apiKey: CALMIO_API_KEY,
+          discoveryDocs: [CALMIO_DISCOVERY_DOC],
+        });
+        gapiReady = true;
+        maybeEnableCalendarButton();
+      }catch(err){
+        document.getElementById("calendarStatus").textContent =
+          "Error inicializando Google Calendar (cliente). Revisa tu API key y sus restricciones.";
+        console.error(err);
+      }
+    });
   }
 
-  async function initGapiClient() {
-    try {
-      // Solo API key + discovery; el client_id y scope van por Google Identity Services
-      await gapi.client.init({
-        apiKey: CALMIO_API_KEY,
-        discoveryDocs: [CALMIO_DISCOVERY_DOC],
-      });
-      gapiReady = true;
-      maybeEnableCalendarButton();
-    } catch (err) {
-      document.getElementById("calendarStatus").textContent =
-        "Error inicializando Google Calendar (cliente). Revisa tu API key y sus restricciones.";
-      console.error(err);
-    }
-  }
-
-  // Se llama cuando se carga gsi/client
   function gisLoaded() {
+    if (!window.google || !google.accounts || !google.accounts.oauth2) return;
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: CALMIO_CLIENT_ID,
       scope: CALMIO_SCOPES,
@@ -602,10 +533,8 @@
       alert("La librería de Google aún no está lista. Recarga la página e inténtalo de nuevo.");
       return;
     }
-
     document.getElementById("calendarStatus").textContent =
       "Abriendo Google para conectar tu calendario...";
-
     tokenClient.callback = async (resp) => {
       if (resp.error) {
         console.error(resp);
@@ -613,15 +542,12 @@
           "No se pudo autorizar el acceso al calendario.";
         return;
       }
-
       document.getElementById("authorize_button").style.display = "none";
       document.getElementById("signout_button").style.display = "inline-block";
       document.getElementById("calendarStatus").textContent =
         "Google Calendar conectado. Leyendo tus próximos eventos...";
-
       await listUpcomingEvents();
     };
-
     tokenClient.requestAccessToken({ prompt: "consent" });
   }
 
@@ -638,11 +564,9 @@
     document.getElementById("events").innerHTML = "";
   }
 
-  // Lee algunos eventos próximos como pseudo-dato
   async function listUpcomingEvents() {
     const eventsDiv = document.getElementById("events");
     eventsDiv.innerHTML = "Cargando eventos...";
-
     try {
       const now = new Date().toISOString();
       const res = await gapi.client.calendar.events.list({
@@ -653,13 +577,11 @@
         maxResults: 10,
         orderBy: "startTime"
       });
-
       const events = res.result.items || [];
       if (!events.length) {
         eventsDiv.innerHTML = "<p class='muted'>No se encontraron eventos próximos.</p>";
         return;
       }
-
       eventsDiv.innerHTML = "";
       events.forEach(ev => {
         const start = ev.start.dateTime || ev.start.date;
@@ -675,6 +597,12 @@
       eventsDiv.innerHTML = "<p class='error'>No se pudieron leer los eventos del calendario.</p>";
     }
   }
+
+  // Inicializar cuando todo ha cargado
+  window.addEventListener("load", () => {
+    gapiLoaded();
+    gisLoaded();
+  });
 </script>
 </body>
 </html>
